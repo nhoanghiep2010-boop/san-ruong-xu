@@ -1,13 +1,13 @@
 
-name: San Ruong Xu Bot
+name: San Ruong Xu
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: '* * * * *'
 
 jobs:
-  run-bot:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,10 +16,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
 
       - name: Run bot
         env:
