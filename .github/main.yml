@@ -1,10 +1,9 @@
+name: Auto Run
 
-name: San Ruong Xu
-
-'on':
+on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-  schedule:
-    - cron: '* * * * *'
 
 jobs:
   scan:
