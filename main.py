@@ -36,10 +36,10 @@ def scan_livestreams():
     print("Đang chờ nguồn dữ liệu livestream TikTok...")
 
 def main():
-    def main():
+
     print("San Ruong Xu Bot started!")
     send_telegram("✅ Bot Săn Rương Xu đã khởi động!")
-print("San Ruong Xu Bot started!")
+
 
     while True:
         try:
