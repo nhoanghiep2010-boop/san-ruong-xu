@@ -1,19 +1,13 @@
-name: CI
+name: Run Python Bot
 
-# Thêm phần này để kích hoạt workflow khi có push lên nhánh main
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      # Thêm các bước (steps) khác của bạn ở đây...
 
     steps:
       - name: Checkout
@@ -32,3 +26,4 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python main.py
+
