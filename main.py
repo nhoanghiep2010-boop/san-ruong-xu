@@ -23,6 +23,7 @@ CHANNELS = [
     "ellenaariette",
     "pedrogaming1k",
     "duoc.lieu.rung.397407302",
+    "nazzywuzzyyyy",
     "kgl.045",
 ]
 
