@@ -5,8 +5,9 @@ import requests
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, EnvelopeEvent
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+CHAT_ID = os.getenv("CHAT_ID", "").strip()
+
 
 # Số giây còn lại trước khi mở rương thì bot mới gửi thông báo
 ALERT_BEFORE_SECONDS = 45
