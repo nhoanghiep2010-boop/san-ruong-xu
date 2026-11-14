@@ -2,21 +2,21 @@ import os
 import re
 import time
 import asyncio
-import requests
+import urllib.request
+import urllib.parse
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, EnvelopeEvent
 
 RAW_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "").strip()
 
-# Tự động trích xuất đúng định dạng Token (số:chữ) bất kể có dính ký tự thừa
 match = re.search(r"\d+:[A-Za-z0-9_-]+", RAW_TOKEN)
-BOT_TOKEN = match.group(0) if match else RAW_TOKEN.strip()
+BOT_TOKEN = match.group(0).lstrip(":") if match else RAW_TOKEN.strip().lstrip(":")
 
-# Số giây còn lại trước khi mở rương thì bot mới gửi thông báo
+print(f"DEBUG: Token dai {len(BOT_TOKEN)} ky tu | Chat ID dai {len(CHAT_ID)} ky tu")
+
 ALERT_BEFORE_SECONDS = 45
 
-# Danh sách các tài khoản TikTok cần theo dõi
 CHANNELS = [
     "hongthao060",
     "violetadragomir09",
@@ -35,23 +35,21 @@ def send_telegram(message):
         return
 
     url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": CHAT_ID,
+        "text": message,
+        "disable_web_page_preview": "false",
+    }).encode("utf-8")
+
     try:
-        res = requests.post(
-            url,
-            data={
-                "chat_id": CHAT_ID,
-                "text": message,
-                "disable_web_page_preview": False,
-            },
-            timeout=15,
-        )
-        if res.status_code != 200:
-            print("Telegram từ chối gửi tin:", res.text)
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as res:
+            if res.status != 200:
+                print("Telegram báo lỗi:", res.read().decode("utf-8"))
     except Exception as e:
-        print("Lỗi gửi Telegram:", e)
+        print("Lỗi gửi Telegram mới:", e)
 
 async def schedule_box_alert(username: str, diamond_count, unpack_at: int):
-    """Đợi đến khi rương còn đúng 45 giây mới gửi thông báo về Telegram"""
     now = time.time()
     wait_time = (unpack_at - ALERT_BEFORE_SECONDS) - now
 
@@ -72,7 +70,6 @@ async def schedule_box_alert(username: str, diamond_count, unpack_at: int):
     print(f"[ĐÃ BÁO 45S] Bắn link @{username} ({diamond_count} xu)")
 
 async def listen_room_for_coins(username: str):
-    """Kết nối vào phòng đang live để rình sự kiện Rương Xu"""
     active_listeners.add(username)
     client = TikTokLiveClient(unique_id=f"@{username}")
 
