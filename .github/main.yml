@@ -1,17 +1,54 @@
-name: Run Python Bot
+import os
+import re
+import time
+import json
+import asyncio
+import urllib.request
+import urllib.parse
+from TikTokLive import TikTokLiveClient
+from TikTokLive.events import ConnectEvent, EnvelopeEvent
 
-on: [push, workflow_dispatch]
+RAW_TOKEN = os.getenv("BOT_TOKEN", "")
+CHAT_ID = os.getenv("CHAT_ID", "").strip()
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: python main.py
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+# Lọc lấy đúng dạng số:chữ và xóa sạch dấu hai chấm/khoảng trắng thừa ở 2 đầu
+match = re.search(r"\d+:[A-Za-z0-9_-]+", RAW_TOKEN)
+BOT_TOKEN = match.group(0).lstrip(":") if match else RAW_TOKEN.strip().lstrip(":")
+
+print(f"DEBUG: Token dai {len(BOT_TOKEN)} ky tu | Chat ID dai {len(CHAT_ID)} ky tu")
+
+# Số giây còn lại trước khi mở rương thì bot mới gửi thông báo
+ALERT_BEFORE_SECONDS = 45
+
+# Danh sách các tài khoản TikTok cần theo dõi
+CHANNELS = [
+    "hongthao060",
+    "violetadragomir09",
+    "ellenaariette",
+    "pedrogaming1k",
+    "duoc.lieu.rung.397407302",
+    "kgl.045",
+]
+
+active_listeners = set()
+notified_boxes = set()
+
+def send_telegram(message):
+    if not BOT_TOKEN or not CHAT_ID:
+        print("Thiếu BOT_TOKEN hoặc CHAT_ID!")
+        return
+
+    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": CHAT_ID,
+        "text": message,
+        "disable_web_page_preview": "false",
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as res:
+            if res.status != 200:
+                print("Telegram báo lỗi:", res.read().decode("utf-8"))
+    except Exception as e:
+        print("Lỗi gửi Telegram:", e)
