@@ -34,7 +34,9 @@ def send_telegram(message):
         print("Thiếu BOT_TOKEN hoặc CHAT_ID!")
         return
 
-    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+     url = "https://api." + "telegram.org/bot" + BOT_TOKEN + "/sendMessage"
+
+
     data = urllib.parse.urlencode({
         "chat_id": CHAT_ID,
         "text": message,
