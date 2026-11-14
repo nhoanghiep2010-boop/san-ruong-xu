@@ -21,17 +21,18 @@ CHANNELS = [
     "duoc.lieu.rung.397407302",
     "kgl.045",
 ]
-
-active_listeners = set()
-notified_boxes = set()
-
 def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
         print("Thiếu BOT_TOKEN hoặc CHAT_ID!")
         return
-    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
+    # Tự động làm sạch token nếu lỡ dán kèm link hoặc chữ 'bot' ở đầu
+    clean_token = BOT_TOKEN.replace("https://telegram.org", "").lstrip("/")
+    if clean_token.startswith("bot"):
+        clean_token = clean_token[3:]
+
+    url = f"https://telegram.orgbot{clean_token}/sendMessage"
     try:
-        requests.post(
+        res = requests.post(
             url,
             data={
                 "chat_id": CHAT_ID,
@@ -39,6 +40,12 @@ def send_telegram(message):
                 "disable_web_page_preview": False,
             },
             timeout=15,
+        )
+        if res.status_code != 200:
+            print("Telegram từ chối gửi tin:", res.text)
+    except Exception as e:
+        print("Lỗi gửi Telegram:", e)
+
         )
     except Exception as e:
         print("Lỗi gửi Telegram:", e)
