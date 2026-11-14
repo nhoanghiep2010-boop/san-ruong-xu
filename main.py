@@ -1,13 +1,17 @@
 import os
+import re
 import time
 import asyncio
 import requests
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, EnvelopeEvent
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+RAW_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "").strip()
 
+# Tự động trích xuất đúng định dạng Token (số:chữ) bất kể có dính ký tự thừa
+match = re.search(r"\d+:[A-Za-z0-9_-]+", RAW_TOKEN)
+BOT_TOKEN = match.group(0) if match else RAW_TOKEN.strip()
 
 # Số giây còn lại trước khi mở rương thì bot mới gửi thông báo
 ALERT_BEFORE_SECONDS = 45
@@ -21,16 +25,16 @@ CHANNELS = [
     "duoc.lieu.rung.397407302",
     "kgl.045",
 ]
+
+active_listeners = set()
+notified_boxes = set()
+
 def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
         print("Thiếu BOT_TOKEN hoặc CHAT_ID!")
         return
-    # Tự động làm sạch token nếu lỡ dán kèm link hoặc chữ 'bot' ở đầu
-    clean_token = BOT_TOKEN.replace("https://telegram.org", "").lstrip("/")
-    if clean_token.startswith("bot"):
-        clean_token = clean_token[3:]
 
-    url = f"https://telegram.orgbot{clean_token}/sendMessage"
+    url = f"https://telegram.org{BOT_TOKEN}/sendMessage"
     try:
         res = requests.post(
             url,
@@ -46,21 +50,15 @@ def send_telegram(message):
     except Exception as e:
         print("Lỗi gửi Telegram:", e)
 
-        )
-    except Exception as e:
-        print("Lỗi gửi Telegram:", e)
-
 async def schedule_box_alert(username: str, diamond_count, unpack_at: int):
     """Đợi đến khi rương còn đúng 45 giây mới gửi thông báo về Telegram"""
     now = time.time()
-    # Tính thời gian cần đợi = (Mốc mở rương - 45 giây) - Thời điểm hiện tại
     wait_time = (unpack_at - ALERT_BEFORE_SECONDS) - now
 
     if wait_time > 0:
         print(f"[HẸN GIỜ] Rương tại @{username} ({diamond_count} xu) sẽ báo sau {int(wait_time)} giây nữa...")
         await asyncio.sleep(wait_time)
 
-    # Tính lại số giây thực tế còn lại ngay lúc gửi
     remaining = max(0, int(unpack_at - time.time()))
     live_url = f"https://tiktok.com@{username}/live"
 
@@ -94,10 +92,8 @@ async def listen_room_for_coins(username: str):
             unpack_at = getattr(event.envelope_info, "unpack_at", 0)
 
             if unpack_at and unpack_at > time.time():
-                # Chạy tác vụ hẹn giờ ngầm để không làm nghẽn việc bắt các rương khác
                 asyncio.create_task(schedule_box_alert(username, diamond_count, unpack_at))
             else:
-                # Nếu không lấy được mốc thời gian mở thì báo ngay lập tức
                 live_url = f"https://tiktok.com@{username}/live"
                 msg = (
                     f"🎁 PHÁT HIỆN RƯƠNG XU!\n"
