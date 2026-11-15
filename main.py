@@ -125,22 +125,23 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
 
     remaining = max(0, int(open_at - time.time()))
     viewers = room_viewers.get(username, "?")
-    coin_text = f"{coins} xu" if coins else fallback_detail
-    slots_text = f"{slots} người nhận" if slots else "Không rõ số suất"
-    viewer_text = f"{viewers} người đang xem"
+    type_icon = "🛍️" if "TÚI" in title else ("🎁" if "RƯƠNG XU" in title else "📦")
+    coin_text = f"{coins}" if coins else "-"
+    slots_text = f"({slots})" if slots else ""
 
-    live_url = "https://www." + "://tiktok.com@" + username + "/live"
+     live_url = "https://tiktok.com@" + username + "/live"
+
 
     msg = (
-        f"⏰ {title} (CÒN {remaining} GIÂY)!\n"
-        f"👤 Kênh: @{username}\n"
-        f"💎 Giá trị: {coin_text} ({slots_text})\n"
-        f"👁️ Phòng live (ở giây 40): {viewer_text}\n"
-        f"👉 Vào húp ngay: {live_url}"
+        f"{type_icon} ⏰ {remaining}s\n"
+        f"👤 @{username}\n"
+        f"💎 {coin_text} {slots_text}\n"
+        f"👁️ {viewers}\n"
+        f"🔗 {live_url}"
     )
-
     send_telegram(msg)
-    print(f"[ĐÃ BÁO 40S] @{username} | {coin_line} | {viewer_line}")
+    print(f"[ĐÃ BÁO 40S] @{username} | {coin_text} {slots_text} | View: {viewers}")
+
 
 async def listen_room_for_coins(username: str):
     active_listeners.add(username)
