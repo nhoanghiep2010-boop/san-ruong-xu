@@ -23,6 +23,10 @@ CHANNELS = [
     "duoc.lieu.rung.397407302",
     "kgl.045",
     "nazzywuzzyyyy",
+    "sorry_to_bother.you",
+    "ropinoe.an",
+    "marius21.02.1992",
+    "eri17.06.15"
 ]
 
 active_listeners = set()
