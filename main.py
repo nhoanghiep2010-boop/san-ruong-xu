@@ -125,21 +125,20 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
 
     remaining = max(0, int(open_at - time.time()))
     viewers = room_viewers.get(username, "?")
+    coin_text = f"{coins} xu" if coins else fallback_detail
+    slots_text = f"{slots} người nhận" if slots else "Không rõ số suất"
+    viewer_text = f"{viewers} người đang xem"
 
-    # Tạo dòng hiển thị giá trị xu và tỷ lệ người xem / số suất (ví dụ: 16/20)
-    coin_line = f"💎 Giá trị: {coins} xu" if coins else f"📦 Loại: {fallback_detail}"
-    ratio_text = f"{viewers}/{slots}" if slots else f"{viewers} người đang xem"
-    viewer_line = f"👥 Tỷ lệ húp: {ratio_text}"
-
-    live_url = f"https://tiktok.com@{username}/live"
+    live_url = "https://www." + "://tiktok.com@" + username + "/live"
 
     msg = (
         f"⏰ {title} (CÒN {remaining} GIÂY)!\n"
         f"👤 Kênh: @{username}\n"
-        f"{coin_line}\n"
-        f"{viewer_line}\n"
+        f"💎 Giá trị: {coin_text} ({slots_text})\n"
+        f"👁️ Phòng live (ở giây 40): {viewer_text}\n"
         f"👉 Vào húp ngay: {live_url}"
     )
+
     send_telegram(msg)
     print(f"[ĐÃ BÁO 40S] @{username} | {coin_line} | {viewer_line}")
 
