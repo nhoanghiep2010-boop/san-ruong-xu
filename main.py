@@ -129,7 +129,7 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
     coin_text = f"{coins}" if coins else "-"
     slots_text = f"({slots})" if slots else ""
 
-     live_url = "https://tiktok.com@" + username + "/live"
+    live_url = "https://tiktok.com@" + username + "/live"
 
 
     msg = (
