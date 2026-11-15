@@ -179,11 +179,11 @@ async def listen_room_for_coins(username: str):
         await client.start()
     except Exception as e:
         print(f"[NGẮT KẾT NỐI] @{username}: {e}")
-    finally:
-         await asyncio.sleep(30)
-
+      finally:
+        await asyncio.sleep(30)
         active_listeners.discard(username)
         room_viewers.pop(username, None)
+
 
 async def main():
     print("San Ruong & Tui Qua Bot (Anti-Block) started!")
