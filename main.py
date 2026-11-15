@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import random
 import asyncio
@@ -26,33 +27,61 @@ CHANNELS = [
     "nazzywuzzyyyy",
     "sorry_to_bother.you",
     "ropinoe.an",
+    "marius21.02.1992",
+    "eri17.06.15",
+    "vic.nguyen68",
+    "luxagency6",
+    "bsd5555sg",
 ]
 
 active_listeners = set()
 notified_items = set()
 last_event_alert = {}
 room_viewers = {}
+room_ids = {}
 
 REWARD_KEYWORDS = [
     "envelope", "treasure", "box", "chest", "redpacket",
     "goody", "bag", "drop", "bonus", "award"
 ]
 
-def send_telegram(message):
+def send_telegram(message, app_link=None, web_link=None):
     if not BOT_TOKEN or not CHAT_ID:
         return
     url = "https://api." + "telegram.org/bot" + BOT_TOKEN + "/sendMessage"
-    data = urllib.parse.urlencode({
+
+    payload = {
         "chat_id": CHAT_ID,
         "text": message,
-        "disable_web_page_preview": "false",
-    }).encode("utf-8")
+        "disable_web_page_preview": True,
+    }
+
+    # Tạo nút bấm mở thẳng App TikTok nếu có link
+    if app_link or web_link:
+        buttons = []
+        if app_link:
+            buttons.append([{"text": "📱 MỞ THẲNG APP TIKTOK", "url": app_link}])
+        if web_link:
+            buttons.append([{"text": "🌐 Mở bằng Web (dự phòng)", "url": web_link}])
+        payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
+
+    data = urllib.parse.urlencode(payload).encode("utf-8")
     try:
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=15) as res:
             pass
     except Exception as e:
         print("Lỗi gửi Telegram:", e)
+
+def build_links(username: str):
+    r_id = room_ids.get(username)
+    web_url = "https://tiktok.com@" + username + "/live"
+    # Link gọi thẳng App TikTok trên điện thoại
+    if r_id:
+        app_url = f"snssdk1233://live?room_id={r_id}"
+    else:
+        app_url = f"tiktok://user/profile/{username}"
+    return app_url, web_url
 
 def extract_open_time(obj, depth=0) -> float:
     if obj is None or depth > 3:
@@ -110,16 +139,15 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
     type_icon = "🛍️" if "TÚI" in title else ("🎁" if "RƯƠNG XU" in title else "📦")
     coin_text = f"{coins}" if coins else "-"
     slots_text = f"({slots})" if slots else ""
-    live_url = "https://tiktok.com@" + username + "/live"
+    app_url, web_url = build_links(username)
 
     msg = (
         f"{type_icon} ⏰ {remaining}s\n"
         f"👤 @{username}\n"
         f"💎 {coin_text} {slots_text}\n"
-        f"👁️ {viewers}\n"
-        f"🔗 {live_url}"
+        f"👁️ {viewers}"
     )
-    send_telegram(msg)
+    send_telegram(msg, app_link=app_url, web_link=web_url)
     print(f"[ĐÃ BÁO 40S] @{username} | {coin_text} {slots_text} | View: {viewers}")
 
 async def listen_room_for_coins(username: str):
@@ -128,7 +156,9 @@ async def listen_room_for_coins(username: str):
 
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
-        print(f"[ĐÃ VÀO PHÒNG] Đang canh tại @{username}")
+        if getattr(client, "room_id", None):
+            room_ids[username] = client.room_id
+        print(f"[ĐÃ VÀO PHÒNG] Đang canh tại @{username} (RoomID: {room_ids.get(username)})")
 
     @client.on(RoomUserSeqEvent)
     async def on_user_seq(event: RoomUserSeqEvent):
@@ -150,8 +180,12 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "RƯƠNG XU", coins, slots, "Rương Xu", open_at))
             else:
                 viewers = room_viewers.get(username, "?")
-                live_url = "https://tiktok.com@" + username + "/live"
-                send_telegram(f"🎁 ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}\n🔗 {live_url}")
+                app_url, web_url = build_links(username)
+                send_telegram(
+                    f"🎁 ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}",
+                    app_link=app_url,
+                    web_link=web_url
+                )
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
 
@@ -172,8 +206,12 @@ async def listen_room_for_coins(username: str):
             else:
                 viewers = room_viewers.get(username, "?")
                 type_icon = "🛍️" if "TÚI" in title else "📦"
-                live_url = "https://tiktok.com@" + username + "/live"
-                send_telegram(f"{type_icon} ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}\n🔗 {live_url}")
+                app_url, web_url = build_links(username)
+                send_telegram(
+                    f"{type_icon} ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}",
+                    app_link=app_url,
+                    web_link=web_url
+                )
 
     try:
         await client.start()
@@ -183,11 +221,11 @@ async def listen_room_for_coins(username: str):
         await asyncio.sleep(30)
         active_listeners.discard(username)
         room_viewers.pop(username, None)
-
+        room_ids.pop(username, None)
 
 async def main():
-    print("San Ruong & Tui Qua Bot (Anti-Block) started!")
-    send_telegram(f"✅ Bot đã khởi động! Đang canh {len(CHANNELS)} kênh (báo trước {ALERT_BEFORE_SECONDS}s).")
+    print("San Ruong & Tui Qua Bot (Direct App Link) started!")
+    send_telegram(f"✅ Bot đã khởi động! Đang canh {len(CHANNELS)} kênh (Mở thẳng App TikTok).")
 
     while True:
         for username in CHANNELS:
@@ -198,12 +236,11 @@ async def main():
                         asyncio.create_task(listen_room_for_coins(username))
                 except Exception as e:
                     if "Expecting value" in str(e):
-                        print(f"[TẠM CHẶN IP] TikTok đang giới hạn quét @{username}, nghỉ 10s...")
+                        print(f"[TẠM CHẶN IP] TikTok giới hạn quét @{username}, nghỉ 10s...")
                         await asyncio.sleep(10)
                     else:
                         print(f"Lỗi kiểm tra @{username}: {e}")
 
-            # Nghỉ ngẫu nhiên 3 - 5 giây giữa mỗi kênh để tránh bị TikTok chặn IP
             await asyncio.sleep(random.uniform(3.0, 5.0))
 
         await asyncio.sleep(25)
