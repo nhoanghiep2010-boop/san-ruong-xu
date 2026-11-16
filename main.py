@@ -4,10 +4,14 @@ import json
 import time
 import random
 import asyncio
+import logging
 import urllib.request
 import urllib.parse
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, EnvelopeEvent, RoomUserSeqEvent, UnknownEvent
+
+# Tắt log cảnh báo PK thừa thãi của thư viện TikTokLive
+logging.getLogger("TikTokLive").setLevel(logging.CRITICAL)
 
 RAW_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "").strip()
@@ -39,10 +43,13 @@ active_listeners = set()
 notified_items = set()
 last_event_alert = {}
 room_viewers = {}
-room_ids = {}
 
 REWARD_KEYWORDS = [
-   def send_telegram(message, app_link=None, web_link=None):
+    "envelope", "treasure", "box", "chest", "redpacket",
+    "goody", "bag", "drop", "bonus", "award"
+]
+
+def send_telegram(message, web_link=None):
     if not BOT_TOKEN or not CHAT_ID:
         return
     url = "https://api." + "telegram.org/bot" + BOT_TOKEN + "/sendMessage"
@@ -53,9 +60,8 @@ REWARD_KEYWORDS = [
         "disable_web_page_preview": True,
     }
 
-    target_url = web_link or app_link
-    if target_url and target_url.startswith("http"):
-        buttons = [[{"text": "📱 MỞ PHÒNG LIVE TIKTOK", "url": target_url}]]
+    if web_link and web_link.startswith("http"):
+        buttons = [[{"text": "📱 MỞ PHÒNG LIVE TIKTOK", "url": web_link}]]
         payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
 
     data = urllib.parse.urlencode(payload).encode("utf-8")
@@ -66,13 +72,8 @@ REWARD_KEYWORDS = [
     except Exception as e:
         print("Lỗi gửi Telegram:", e)
 
-def build_links(username: str):
-    web_url = "https://tiktok.com@" + username + "/live"
-    return web_url, web_url
-
-    else:
-        app_url = f"tiktok://user/profile/{username}"
-    return app_url, web_url
+def build_live_url(username: str):
+    return "https://tiktok.com@" + username + "/live"
 
 def extract_open_time(obj, depth=0) -> float:
     if obj is None or depth > 3:
@@ -130,7 +131,7 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
     type_icon = "🛍️" if "TÚI" in title else ("🎁" if "RƯƠNG XU" in title else "📦")
     coin_text = f"{coins}" if coins else "-"
     slots_text = f"({slots})" if slots else ""
-    app_url, web_url = build_links(username)
+    web_url = build_live_url(username)
 
     msg = (
         f"{type_icon} ⏰ {remaining}s\n"
@@ -138,7 +139,7 @@ async def schedule_reward_alert(username: str, title: str, coins, slots, fallbac
         f"💎 {coin_text} {slots_text}\n"
         f"👁️ {viewers}"
     )
-    send_telegram(msg, app_link=app_url, web_link=web_url)
+    send_telegram(msg, web_link=web_url)
     print(f"[ĐÃ BÁO 40S] @{username} | {coin_text} {slots_text} | View: {viewers}")
 
 async def listen_room_for_coins(username: str):
@@ -147,9 +148,7 @@ async def listen_room_for_coins(username: str):
 
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
-        if getattr(client, "room_id", None):
-            room_ids[username] = client.room_id
-        print(f"[ĐÃ VÀO PHÒNG] Đang canh tại @{username} (RoomID: {room_ids.get(username)})")
+        print(f"[ĐÃ VÀO PHÒNG] Đang canh tại @{username}")
 
     @client.on(RoomUserSeqEvent)
     async def on_user_seq(event: RoomUserSeqEvent):
@@ -171,10 +170,9 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "RƯƠNG XU", coins, slots, "Rương Xu", open_at))
             else:
                 viewers = room_viewers.get(username, "?")
-                app_url, web_url = build_links(username)
+                web_url = build_live_url(username)
                 send_telegram(
                     f"🎁 ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}",
-                    app_link=app_url,
                     web_link=web_url
                 )
         except Exception as e:
@@ -197,10 +195,9 @@ async def listen_room_for_coins(username: str):
             else:
                 viewers = room_viewers.get(username, "?")
                 type_icon = "🛍️" if "TÚI" in title else "📦"
-                app_url, web_url = build_links(username)
+                web_url = build_live_url(username)
                 send_telegram(
                     f"{type_icon} ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}",
-                    app_link=app_url,
                     web_link=web_url
                 )
 
@@ -212,11 +209,10 @@ async def listen_room_for_coins(username: str):
         await asyncio.sleep(30)
         active_listeners.discard(username)
         room_viewers.pop(username, None)
-        room_ids.pop(username, None)
 
 async def main():
-    print("San Ruong & Tui Qua Bot (Direct App Link) started!")
-    send_telegram(f"✅ Bot đã khởi động! Đang canh {len(CHANNELS)} kênh (Mở thẳng App TikTok).")
+    print("San Ruong & Tui Qua Bot (15 Kenh - Fixed Telegram Button) started!")
+    send_telegram(f"✅ Bot đã khởi động! Đang canh {len(CHANNELS)} kênh (báo trước {ALERT_BEFORE_SECONDS}s).")
 
     while True:
         for username in CHANNELS:
