@@ -120,11 +120,17 @@ def parse_reward_details(obj):
                     open_at = ts
                 elif 1 <= num <= 50000:
                     small_nums.append(num)
+            # Nếu không có timestamp 10 chữ số, tìm thời gian đếm ngược dạng giây (ví dụ 60s, 120s, 180s, 300s)
+            if open_at == 0.0:
+                for dur in:
+                    if dur in small_nums:
+                        open_at = now + dur
+                        break
             if coins is None and len(small_nums) >= 2:
                 candidates = sorted(set(small_nums), reverse=True)
                 for c in candidates:
                     for s in candidates:
-                        if c >= s and 1 <= s <= 500 and c <= 20000:
+                        if c >= s and 1 <= s <= 500 and c <= 20000 and c not in:
                             coins, slots = c, s
                             break
                     if coins is not None:
@@ -132,6 +138,7 @@ def parse_reward_details(obj):
             return
 
         time_keys = ["unpack_at", "open_at", "end_time", "expire_time", "draw_time", "target_time"]
+        dur_keys = ["countdown", "duration", "remain_time", "left_time"]
         coin_keys = ["diamond_count", "coin_count", "total_diamond", "reward_amount"]
         people_keys = ["people_count", "winner_count", "total_count", "max_count", "user_count"]
 
@@ -145,6 +152,8 @@ def parse_reward_details(obj):
                     ts = v / 1000.0 if v > 1e11 else float(v)
                     if now + 5 < ts < now + 1800:
                         open_at = ts
+                elif open_at == 0.0 and any(dk in k_str for dk in dur_keys) and 10 <= v <= 1800:
+                    open_at = now + float(v)
                 elif coins is None and any(ck in k_str for ck in coin_keys):
                     coins = int(v)
                 elif slots is None and any(pk in k_str for pk in people_keys):
@@ -154,6 +163,7 @@ def parse_reward_details(obj):
 
     walk(obj)
     return open_at, coins, slots
+
 
 async def schedule_reward_alert(username: str, type_icon: str, coins, slots, open_at: float):
     try:
@@ -245,7 +255,7 @@ async def listen_room_for_coins(username: str):
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
 
-    @client.on(UnknownEvent)
+      @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
         raw_type = str(getattr(event, "type", ""))
         base_msg = getattr(event, "base_message", None)
@@ -255,9 +265,12 @@ async def listen_room_for_coins(username: str):
 
         if any(k in full_sig for k in REWARD_KEYWORDS):
             open_at, coins, slots = parse_reward_details(event)
-            if open_at > time.time() + 8 and coins and slots:
+            if open_at > time.time() + 8:
                 icon = "🛍️" if ("goody" in full_sig or "bag" in full_sig) else "📦"
-                asyncio.create_task(schedule_reward_alert(username, icon, coins, slots, open_at))
+                c_val = coins if coins else "-"
+                s_val = slots if slots else "?"
+                asyncio.create_task(schedule_reward_alert(username, icon, c_val, s_val, open_at))
+
 
     try:
         await client.start()
