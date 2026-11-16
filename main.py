@@ -62,12 +62,17 @@ def send_telegram(message, web_link=None):
         "disable_web_page_preview": True
     }
     data = urllib.parse.urlencode(payload).encode("utf-8")
-    try:
-        req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=15) as res:
-            pass
-    except Exception as e:
-        print("Lỗi gửi Telegram:", e)
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=data, method="POST")
+            with urllib.request.urlopen(req, timeout=15) as res:
+                if res.status == 200:
+                    print("[TELEGRAM OK] Đã gửi tin nhắn thành công!")
+                    return
+        except Exception as e:
+            print(f"Lỗi gửi Telegram (lần {attempt + 1}):", e)
+            time.sleep(2)
+
 
 def build_live_url(username: str):
     domain = ".".join(["www", "tiktok", "com"])
@@ -151,38 +156,42 @@ def parse_reward_details(obj):
     return open_at, coins, slots
 
 async def schedule_reward_alert(username: str, type_icon: str, coins, slots, open_at: float):
-    """Hẹn giờ về 40s; nếu rương/túi đã trôi qua 40s (còn từ 8s - 39s) thì gửi ngay lập tức"""
-    if open_at > 1e11:
-        open_at = open_at / 1000.0
+    try:
+        if open_at > 1e11:
+            open_at = open_at / 1000.0
 
-    unique_key = f"{username}:{int(open_at // 10)}"
-    if unique_key in scheduled_keys:
-        return
-    scheduled_keys.add(unique_key)
+        unique_key = f"{username}:{int(open_at // 10)}"
+        if unique_key in scheduled_keys:
+            return
+        scheduled_keys.add(unique_key)
 
-    now = time.time()
-    seconds_left = open_at - now
+        now = time.time()
+        seconds_left = open_at - now
 
-    # Nếu còn quá ít thời gian (dưới 8 giây) thì bỏ qua vì bấm vào không kịp húp
-    if seconds_left < 8:
-        return
+        if seconds_left < 8:
+            return
 
-    wait_time = seconds_left - ALERT_BEFORE_SECONDS
-    if wait_time > 0:
-        print(f"[HẸN GIỜ 40S] {type_icon} @{username} ({coins} xu / {slots} suất) báo sau {int(wait_time)}s...")
-        await asyncio.sleep(wait_time)
+        wait_time = seconds_left - ALERT_BEFORE_SECONDS
+        if wait_time > 0:
+            print(f"[HẸN GIỜ 40S] {type_icon} @{username} ({coins} xu / {slots} suất) báo sau {int(wait_time)}s...")
+            end_wait = time.time() + wait_time
+            while time.time() < end_wait:
+                await asyncio.sleep(min(1.0, end_wait - time.time()))
 
-    remaining = max(0, int(round(open_at - time.time())))
-    viewers = room_viewers.get(username, "?")
+        remaining = max(0, int(round(open_at - time.time())))
+        viewers = room_viewers.get(username, "?")
 
-    msg = (
-        f"{type_icon} ⏰ {remaining}s\n"
-        f"👤 @{username}\n"
-        f"💎 {coins} ({slots})\n"
-        f"👁️ {viewers}"
-    )
-    send_telegram(msg, web_link=build_live_url(username))
-    print(f"[ĐÃ BÁO {remaining}S] @{username} | {coins} ({slots}) | View: {viewers}")
+        msg = (
+            f"{type_icon} ⏰ {remaining}s\n"
+            f"👤 @{username}\n"
+            f"💎 {coins} ({slots})\n"
+            f"👁️ {viewers}"
+        )
+        print(f"[ĐANG BÁO {remaining}S] @{username} | {coins} ({slots}) | View: {viewers}")
+        await asyncio.to_thread(send_telegram, msg, build_live_url(username))
+    except Exception as e:
+        print(f"[LỖI HẸN GIỜ] @{username}: {e}")
+
 
 async def listen_room_for_coins(username: str):
     active_listeners.add(username)
