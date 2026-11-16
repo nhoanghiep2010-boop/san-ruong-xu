@@ -122,7 +122,8 @@ def parse_reward_details(obj):
                     small_nums.append(num)
             # Nếu không có timestamp 10 chữ số, tìm thời gian đếm ngược dạng giây (ví dụ 60s, 120s, 180s, 300s)
             if open_at == 0.0:
-                for dur in:
+                    for dur in (60, 120, 180, 300, 600):
+
                     if dur in small_nums:
                         open_at = now + dur
                         break
@@ -130,7 +131,8 @@ def parse_reward_details(obj):
                 candidates = sorted(set(small_nums), reverse=True)
                 for c in candidates:
                     for s in candidates:
-                        if c >= s and 1 <= s <= 500 and c <= 20000 and c not in:
+                    if c >= s and 1 <= s <= 500 and c <= 20000 and c not in (60, 120, 180, 300, 600):
+
                             coins, slots = c, s
                             break
                     if coins is not None:
