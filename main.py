@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import time
 import random
 import asyncio
@@ -37,11 +36,11 @@ CHANNELS = [
     "bsd5555sg",
     "tribalchief503",
     "the_dreamer104",
+    "umid.geldi.zirvee",
 ]
 
 active_listeners = set()
-notified_items = set()
-last_event_alert = {}
+scheduled_keys = set()
 room_viewers = {}
 
 REWARD_KEYWORDS = [
@@ -71,84 +70,116 @@ def build_live_url(username: str):
     domain = ".".join(["www", "tiktok", "com"])
     return "https://" + domain + "/@" + username + "/live"
 
+def decode_varints_from_bytes(raw_bytes):
+    if not isinstance(raw_bytes, (bytes, bytearray)):
+        return []
+    numbers = []
+    i = 0
+    n = len(raw_bytes)
+    while i < n:
+        val = 0
+        shift = 0
+        start = i
+        while i < n and shift < 64:
+            b = raw_bytes[i]
+            i += 1
+            val |= (b & 0x7F) << shift
+            if not (b & 0x80):
+                if val > 0:
+                    numbers.append(val)
+                break
+            shift += 7
+        else:
+            i = start + 1
+    return numbers
 
-
-def extract_open_time(obj, depth=0) -> float:
-    if obj is None or depth > 4:
-        return 0.0
-    time_keys = ["unpack_at", "open_at", "end_time", "expire_time", "draw_time", "target_time"]
+def parse_reward_details(obj):
+    open_at = 0.0
+    coins = None
+    slots = None
     now = time.time()
-    items = obj.items() if isinstance(obj, dict) else (vars(obj).items() if hasattr(obj, "__dict__") else [])
-    for k, v in items:
-        if str(k).startswith("_"):
-            continue
-        if any(tk in str(k).lower() for tk in time_keys) and isinstance(v, (int, float)):
-            ts = v / 1000.0 if v > 1e11 else float(v)
-            if now < ts < now + 3600:
-                return ts
-        res = extract_open_time(v, depth + 1)
-        if res > 0:
-            return res
-    return 0.0
 
-def extract_reward_stats(obj, depth=0):
-    coins, people = None, None
-    if obj is None or depth > 4:
-        return coins, people
-    coin_keys = ["diamond_count", "coin_count", "total_diamond", "reward_amount"]
-    people_keys = ["people_count", "winner_count", "total_count", "max_count", "user_count"]
-    items = obj.items() if isinstance(obj, dict) else (vars(obj).items() if hasattr(obj, "__dict__") else [])
-    for k, v in items:
-        k_str = str(k).lower()
-        if k_str.startswith("_"):
-            continue
-        if isinstance(v, (int, float)) and v > 0:
-            if coins is None and any(ck in k_str for ck in coin_keys):
-                coins = int(v)
-            elif people is None and any(pk in k_str for pk in people_keys):
-                people = int(v)
-        elif isinstance(v, (dict, object)):
-            sub_c, sub_p = extract_reward_stats(v, depth + 1)
-            if coins is None:
-                coins = sub_c
-            if people is None:
-                people = sub_p
-    return coins, people
+    def walk(item, depth=0):
+        nonlocal open_at, coins, slots
+        if item is None or depth > 4:
+            return
+        if isinstance(item, (bytes, bytearray)):
+            nums = decode_varints_from_bytes(item)
+            small_nums = []
+            for num in nums:
+                ts = num / 1000.0 if num > 1e11 else float(num)
+                if now + 5 < ts < now + 1800 and open_at == 0.0:
+                    open_at = ts
+                elif 1 <= num <= 50000:
+                    small_nums.append(num)
+            if coins is None and len(small_nums) >= 2:
+                candidates = sorted(set(small_nums), reverse=True)
+                for c in candidates:
+                    for s in candidates:
+                        if c >= s and 1 <= s <= 500 and c <= 20000:
+                            coins, slots = c, s
+                            break
+                    if coins is not None:
+                        break
+            return
 
-def scan_dict_for_existing_rewards(obj, found_list, depth=0):
-    if obj is None or depth > 4:
-        return
-    items = obj.items() if isinstance(obj, dict) else (vars(obj).items() if hasattr(obj, "__dict__") else [])
-    for k, v in items:
-        k_str = str(k).lower()
-        if k_str.startswith("_"):
-            continue
-        if any(rk in k_str for rk in ["envelope", "goody", "treasure", "redpacket", "box"]):
-            if v and v != [] and v != {}:
-                found_list.append((k_str, v))
-        elif isinstance(v, (dict, list)) or hasattr(v, "__dict__"):
-            if isinstance(v, list):
-                for item in v[:5]:
-                    scan_dict_for_existing_rewards(item, found_list, depth + 1)
+        time_keys = ["unpack_at", "open_at", "end_time", "expire_time", "draw_time", "target_time"]
+        coin_keys = ["diamond_count", "coin_count", "total_diamond", "reward_amount"]
+        people_keys = ["people_count", "winner_count", "total_count", "max_count", "user_count"]
+
+        entries = item.items() if isinstance(item, dict) else (vars(item).items() if hasattr(item, "__dict__") else [])
+        for k, v in entries:
+            k_str = str(k).lower()
+            if k_str.startswith("_"):
+                continue
+            if isinstance(v, (int, float)) and v > 0:
+                if open_at == 0.0 and any(tk in k_str for tk in time_keys):
+                    ts = v / 1000.0 if v > 1e11 else float(v)
+                    if now + 5 < ts < now + 1800:
+                        open_at = ts
+                elif coins is None and any(ck in k_str for ck in coin_keys):
+                    coins = int(v)
+                elif slots is None and any(pk in k_str for pk in people_keys):
+                    slots = int(v)
             else:
-                scan_dict_for_existing_rewards(v, found_list, depth + 1)
+                walk(v, depth + 1)
 
-async def schedule_reward_alert(username: str, title: str, coins, slots, open_at: float):
-    now = time.time()
+    walk(obj)
+    return open_at, coins, slots
+
+async def schedule_reward_alert(username: str, type_icon: str, coins, slots, open_at: float):
+    """Hẹn giờ về 40s; nếu rương/túi đã trôi qua 40s (còn từ 8s - 39s) thì gửi ngay lập tức"""
     if open_at > 1e11:
         open_at = open_at / 1000.0
-    wait_time = (open_at - ALERT_BEFORE_SECONDS) - now
+
+    unique_key = f"{username}:{int(open_at // 10)}"
+    if unique_key in scheduled_keys:
+        return
+    scheduled_keys.add(unique_key)
+
+    now = time.time()
+    seconds_left = open_at - now
+
+    # Nếu còn quá ít thời gian (dưới 8 giây) thì bỏ qua vì bấm vào không kịp húp
+    if seconds_left < 8:
+        return
+
+    wait_time = seconds_left - ALERT_BEFORE_SECONDS
     if wait_time > 0:
-        print(f"[HẸN GIỜ 40S] {title} tại @{username} sẽ báo sau {int(wait_time)}s...")
+        print(f"[HẸN GIỜ 40S] {type_icon} @{username} ({coins} xu / {slots} suất) báo sau {int(wait_time)}s...")
         await asyncio.sleep(wait_time)
-    remaining = max(0, int(open_at - time.time()))
+
+    remaining = max(0, int(round(open_at - time.time())))
     viewers = room_viewers.get(username, "?")
-    type_icon = "🛍️" if "TÚI" in title else ("🎁" if "RƯƠNG XU" in title else "📦")
-    coin_text = f"{coins}" if coins else "-"
-    slots_text = f"({slots})" if slots else ""
-    msg = f"{type_icon} ⏰ {remaining}s\n👤 @{username}\n💎 {coin_text} {slots_text}\n👁️ {viewers}"
+
+    msg = (
+        f"{type_icon} ⏰ {remaining}s\n"
+        f"👤 @{username}\n"
+        f"💎 {coins} ({slots})\n"
+        f"👁️ {viewers}"
+    )
     send_telegram(msg, web_link=build_live_url(username))
-    print(f"[ĐÃ BÁO {remaining}S] @{username} | {coin_text} {slots_text} | View: {viewers}")
+    print(f"[ĐÃ BÁO {remaining}S] @{username} | {coins} ({slots}) | View: {viewers}")
 
 async def listen_room_for_coins(username: str):
     active_listeners.add(username)
@@ -163,24 +194,28 @@ async def listen_room_for_coins(username: str):
                 user_count = room_data.get("user_count") if isinstance(room_data, dict) else getattr(room_data, "user_count", None)
                 if user_count:
                     room_viewers[username] = int(user_count)
-                existing = []
-                scan_dict_for_existing_rewards(room_data, existing)
-                for key_name, val in existing:
-                    alert_key = f"{username}:init:{key_name}"
-                    if time.time() - last_event_alert.get(alert_key, 0) < 45:
-                        continue
-                    last_event_alert[alert_key] = time.time()
-                    title = "TÚI QUÀ" if ("goody" in key_name or "bag" in key_name) else ("RƯƠNG XU" if "envelope" in key_name else "RƯƠNG SỰ KIỆN")
-                    coins, slots = extract_reward_stats(val)
-                    open_at = extract_open_time(val)
-                    if open_at > time.time():
-                        asyncio.create_task(schedule_reward_alert(username, title, coins, slots, open_at))
-                    elif coins or slots:
-                        viewers = room_viewers.get(username, "?")
-                        type_icon = "🛍️" if "TÚI" in title else ("🎁" if "RƯƠNG XU" in title else "📦")
-                        send_telegram(f"{type_icon} ⏰ Có sẵn\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}", web_link=build_live_url(username))
+
+                # Quét rương/túi đã thả sẵn từ trước (kể cả khi chỉ còn 10s - 39s)
+                def scan_init(node, depth=0):
+                    if node is None or depth > 4:
+                        return
+                    entries = node.items() if isinstance(node, dict) else (vars(node).items() if hasattr(node, "__dict__") else [])
+                    for k, v in entries:
+                        k_str = str(k).lower()
+                        if k_str.startswith("_"):
+                            continue
+                        if any(rk in k_str for rk in ["envelope", "goody", "treasure", "redpacket", "box"]) and v:
+                            open_at, coins, slots = parse_reward_details(v)
+                            if open_at > time.time() + 8 and coins and slots:
+                                icon = "🛍️" if ("goody" in k_str or "bag" in k_str) else ("🎁" if "envelope" in k_str else "📦")
+                                asyncio.create_task(schedule_reward_alert(username, icon, coins, slots, open_at))
+                        elif isinstance(v, (dict, list)) or hasattr(v, "__dict__"):
+                            for sub in (v[:5] if isinstance(v, list) else [v]):
+                                scan_init(sub, depth + 1)
+
+                scan_init(room_data)
         except Exception as e:
-            print(f"Lỗi quét dữ liệu khởi tạo @{username}: {e}")
+            print(f"Lỗi quét khởi tạo @{username}: {e}")
 
     @client.on(RoomUserSeqEvent)
     async def on_user_seq(event: RoomUserSeqEvent):
@@ -192,17 +227,9 @@ async def listen_room_for_coins(username: str):
     async def on_envelope(event: EnvelopeEvent):
         try:
             info = getattr(event, "envelope_info", event)
-            box_id = str(getattr(info, "envelope_id", time.time()))
-            if box_id in notified_items:
-                return
-            notified_items.add(box_id)
-            coins, slots = extract_reward_stats(info)
-            open_at = float(getattr(info, "unpack_at", 0)) or extract_open_time(event)
-            if open_at > 0:
-                asyncio.create_task(schedule_reward_alert(username, "RƯƠNG XU", coins, slots, open_at))
-            else:
-                viewers = room_viewers.get(username, "?")
-                send_telegram(f"🎁 ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}", web_link=build_live_url(username))
+            open_at, coins, slots = parse_reward_details(info)
+            if open_at > time.time() + 8 and coins and slots:
+                asyncio.create_task(schedule_reward_alert(username, "🎁", coins, slots, open_at))
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
 
@@ -212,23 +239,13 @@ async def listen_room_for_coins(username: str):
         base_msg = getattr(event, "base_message", None)
         method_name = str(getattr(base_msg, "method", "")) if base_msg else ""
         raw_payload = str(getattr(event, "payload", b""))[:300]
-        full_signature = f"{type(event).__name__} {raw_type} {method_name} {raw_payload}".lower()
-        if any(k in full_signature for k in REWARD_KEYWORDS):
-            sig_id = method_name or raw_type or "unknown_reward"
-            alert_key = f"{username}:{sig_id}"
-            now = time.time()
-            if now - last_event_alert.get(alert_key, 0) < 30:
-                return
-            last_event_alert[alert_key] = now
-            title = "TÚI QUÀ" if ("goody" in full_signature or "bag" in full_signature) else "RƯƠNG SỰ KIỆN"
-            coins, slots = extract_reward_stats(event)
-            open_at = extract_open_time(event)
-            if open_at > 0:
-                asyncio.create_task(schedule_reward_alert(username, title, coins, slots, open_at))
-            else:
-                viewers = room_viewers.get(username, "?")
-                type_icon = "🛍️" if "TÚI" in title else "📦"
-                send_telegram(f"{type_icon} ⏰ Ngay\n👤 @{username}\n💎 {coins or '-'} ({slots or '?'})\n👁️ {viewers}", web_link=build_live_url(username))
+        full_sig = f"{type(event).__name__} {raw_type} {method_name} {raw_payload}".lower()
+
+        if any(k in full_sig for k in REWARD_KEYWORDS):
+            open_at, coins, slots = parse_reward_details(event)
+            if open_at > time.time() + 8 and coins and slots:
+                icon = "🛍️" if ("goody" in full_sig or "bag" in full_sig) else "📦"
+                asyncio.create_task(schedule_reward_alert(username, icon, coins, slots, open_at))
 
     try:
         await client.start()
@@ -240,8 +257,8 @@ async def listen_room_for_coins(username: str):
         room_viewers.pop(username, None)
 
 async def main():
-    print("San Ruong & Tui Qua Bot (Full Scan + Pre-dropped) started!")
-    send_telegram(f"✅ Bot Bản Full (Quét cả rương/túi thả trước) đã chạy! Đang canh {len(CHANNELS)} kênh.")
+    print("San Ruong & Tui Qua Bot (17 Kenh - 40s & 10-39s Immediate) started!")
+    send_telegram(f"✅ Bot 17 Kênh đã khởi động! Báo ở mốc 40s (hoặc báo ngay nếu còn 10s-39s).")
     while True:
         for username in CHANNELS:
             if username not in active_listeners:
@@ -259,5 +276,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
 
 
