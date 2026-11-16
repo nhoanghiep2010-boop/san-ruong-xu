@@ -9,7 +9,10 @@ import urllib.parse
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, EnvelopeEvent, RoomUserSeqEvent, UnknownEvent
 
+logging.basicConfig(level=logging.CRITICAL)
 logging.getLogger("TikTokLive").setLevel(logging.CRITICAL)
+logging.getLogger("betterproto").setLevel(logging.CRITICAL)
+
 
 RAW_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "").strip()
