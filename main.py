@@ -257,8 +257,8 @@ async def listen_room_for_coins(username: str):
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
 
-      @client.on(UnknownEvent)
-    async def on_unknown(event: UnknownEvent):
+       @client.on(UnknownEvent)
+        async def on_unknown(event: UnknownEvent):
         raw_type = str(getattr(event, "type", ""))
         base_msg = getattr(event, "base_message", None)
         method_name = str(getattr(base_msg, "method", "")) if base_msg else ""
