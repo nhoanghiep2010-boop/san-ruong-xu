@@ -124,9 +124,9 @@ def parse_reward_details(obj):
             if open_at == 0.0:
                     for dur in (60, 120, 180, 300, 600):
 
-                    if dur in small_nums:
-                        open_at = now + dur
-                        break
+                        if dur in small_nums:
+                            open_at = now + dur
+                            break
             if coins is None and len(small_nums) >= 2:
                 candidates = sorted(set(small_nums), reverse=True)
                 for c in candidates:
