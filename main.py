@@ -52,9 +52,12 @@ def send_telegram(message, web_link=None):
     if not BOT_TOKEN or not CHAT_ID:
         return
     url = "https://api." + "telegram.org/bot" + BOT_TOKEN + "/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message, "disable_web_page_preview": True}
-    if web_link and web_link.startswith("http"):
-        payload["reply_markup"] = json.dumps({"inline_keyboard": [[{"text": "📱 MỞ PHÒNG LIVE TIKTOK", "url": web_link}]]})
+    full_text = f"{message}\n🔗 {web_link}" if web_link else message
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": full_text,
+        "disable_web_page_preview": True
+    }
     data = urllib.parse.urlencode(payload).encode("utf-8")
     try:
         req = urllib.request.Request(url, data=data, method="POST")
@@ -64,7 +67,9 @@ def send_telegram(message, web_link=None):
         print("Lỗi gửi Telegram:", e)
 
 def build_live_url(username: str):
-        return "https://www." + "tik" + "://tok.com@" + username + "/live"
+    domain = ".".join(["www", "tiktok", "com"])
+    return "https://" + domain + "/@" + username + "/live"
+
 
 
 def extract_open_time(obj, depth=0) -> float:
