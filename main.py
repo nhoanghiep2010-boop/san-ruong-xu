@@ -42,11 +42,7 @@ room_viewers = {}
 room_ids = {}
 
 REWARD_KEYWORDS = [
-    "envelope", "treasure", "box", "chest", "redpacket",
-    "goody", "bag", "drop", "bonus", "award"
-]
-
-def send_telegram(message, app_link=None, web_link=None):
+   def send_telegram(message, app_link=None, web_link=None):
     if not BOT_TOKEN or not CHAT_ID:
         return
     url = "https://api." + "telegram.org/bot" + BOT_TOKEN + "/sendMessage"
@@ -57,13 +53,9 @@ def send_telegram(message, app_link=None, web_link=None):
         "disable_web_page_preview": True,
     }
 
-    # Tạo nút bấm mở thẳng App TikTok nếu có link
-    if app_link or web_link:
-        buttons = []
-        if app_link:
-            buttons.append([{"text": "📱 MỞ THẲNG APP TIKTOK", "url": app_link}])
-        if web_link:
-            buttons.append([{"text": "🌐 Mở bằng Web (dự phòng)", "url": web_link}])
+    target_url = web_link or app_link
+    if target_url and target_url.startswith("http"):
+        buttons = [[{"text": "📱 MỞ PHÒNG LIVE TIKTOK", "url": target_url}]]
         payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
 
     data = urllib.parse.urlencode(payload).encode("utf-8")
@@ -75,11 +67,9 @@ def send_telegram(message, app_link=None, web_link=None):
         print("Lỗi gửi Telegram:", e)
 
 def build_links(username: str):
-    r_id = room_ids.get(username)
     web_url = "https://tiktok.com@" + username + "/live"
-    # Link gọi thẳng App TikTok trên điện thoại
-    if r_id:
-        app_url = f"snssdk1233://live?room_id={r_id}"
+    return web_url, web_url
+
     else:
         app_url = f"tiktok://user/profile/{username}"
     return app_url, web_url
