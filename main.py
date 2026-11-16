@@ -131,7 +131,7 @@ def parse_reward_details(obj):
                 candidates = sorted(set(small_nums), reverse=True)
                 for c in candidates:
                     for s in candidates:
-                    if c >= s and 1 <= s <= 500 and c <= 20000 and c not in (60, 120, 180, 300, 600):
+                        if c >= s and 1 <= s <= 500 and c <= 20000 and c not in (60, 120, 180, 300, 600):
 
                             coins, slots = c, s
                             break
