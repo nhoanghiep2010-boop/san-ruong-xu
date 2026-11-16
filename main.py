@@ -64,7 +64,8 @@ def send_telegram(message, web_link=None):
         print("Lỗi gửi Telegram:", e)
 
 def build_live_url(username: str):
-    return "https://tiktok.com@" + username + "/live"
+      return "https://" + "://tiktok.com" + "/@" + username + "/live"
+
 
 def extract_open_time(obj, depth=0) -> float:
     if obj is None or depth > 4:
