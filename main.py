@@ -256,7 +256,7 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "🎁", coins, slots, open_at))
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
-                @client.on(UnknownEvent)
+    @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
         raw_type = str(getattr(event, "type", ""))
         base_msg = getattr(event, "base_message", None)
