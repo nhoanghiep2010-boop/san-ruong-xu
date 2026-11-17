@@ -6,15 +6,12 @@ import asyncio
 import logging
 import urllib.request
 import urllib.parse
-from TikTokLive import TikTokLiveClient
 from TikTokLive import TikTokLiveClient, events
 from TikTokLive.events import ConnectEvent, EnvelopeEvent, RoomUserSeqEvent, UnknownEvent
-
 
 logging.basicConfig(level=logging.CRITICAL)
 logging.getLogger("TikTokLive").setLevel(logging.CRITICAL)
 logging.getLogger("betterproto").setLevel(logging.CRITICAL)
-
 
 RAW_TOKEN = os.getenv("BOT_TOKEN", "")
 CHAT_ID = os.getenv("CHAT_ID", "").strip()
@@ -75,7 +72,6 @@ def send_telegram(message, web_link=None):
             print(f"Lỗi gửi Telegram (lần {attempt + 1}):", e)
             time.sleep(2)
 
-
 def build_live_url(username: str):
     domain = ".".join(["www", "tiktok", "com"])
     return "https://" + domain + "/@" + username + "/live"
@@ -108,6 +104,7 @@ def parse_reward_details(obj):
     coins = None
     slots = None
     now = time.time()
+    dur_list = (60, 120, 180, 300, 600)
 
     def walk(item, depth=0):
         nonlocal open_at, coins, slots
@@ -122,31 +119,28 @@ def parse_reward_details(obj):
                     open_at = ts
                 elif 1 <= num <= 50000:
                     small_nums.append(num)
-            # Nếu không có timestamp 10 chữ số, tìm thời gian đếm ngược dạng giây (ví dụ 60s, 120s, 180s, 300s)
             if open_at == 0.0:
-                    for dur in (60, 120, 180, 300, 600):
-
-                        if dur in small_nums:
-                            open_at = now + dur
-                            break
+                for dur in dur_list:
+                    if dur in small_nums:
+                        open_at = now + dur
+                        break
             if coins is None and len(small_nums) >= 2:
                 candidates = sorted(set(small_nums), reverse=True)
                 for c in candidates:
                     for s in candidates:
-                        if c >= s and 1 <= s <= 500 and c <= 20000 and c not in (60, 120, 180, 300, 600):
-
+                        if c >= s and 1 <= s <= 500 and c <= 20000 and c not in dur_list:
                             coins, slots = c, s
                             break
                     if coins is not None:
                         break
             return
 
-        time_keys = ["unpack_at", "open_at", "end_time", "expire_time", "draw_time", "target_time"]
-        dur_keys = ["countdown", "duration", "remain_time", "left_time"]
-        coin_keys = ["diamond_count", "coin_count", "total_diamond", "reward_amount"]
-        people_keys = ["people_count", "winner_count", "total_count", "max_count", "user_count"]
+        time_keys = ("unpack_at", "open_at", "end_time", "expire_time", "draw_time", "target_time")
+        dur_keys = ("countdown", "duration", "remain_time", "left_time")
+        coin_keys = ("diamond_count", "coin_count", "total_diamond", "reward_amount")
+        people_keys = ("people_count", "winner_count", "total_count", "max_count", "user_count")
 
-        entries = item.items() if isinstance(item, dict) else (vars(item).items() if hasattr(item, "__dict__") else [])
+        entries = item.items() if isinstance(item, dict) else (vars(item).items() if hasattr(item, "__dict__") else ())
         for k, v in entries:
             k_str = str(k).lower()
             if k_str.startswith("_"):
@@ -167,7 +161,6 @@ def parse_reward_details(obj):
 
     walk(obj)
     return open_at, coins, slots
-
 
 async def schedule_reward_alert(username: str, type_icon: str, coins, slots, open_at: float):
     try:
@@ -206,14 +199,13 @@ async def schedule_reward_alert(username: str, type_icon: str, coins, slots, ope
     except Exception as e:
         print(f"[LỖI HẸN GIỜ] @{username}: {e}")
 
-
 async def listen_room_for_coins(username: str):
     active_listeners.add(username)
     client = TikTokLiveClient(unique_id=f"@{username}")
 
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
-        print(f"[ĐÃ VÀO PHÒNG] Đang canh tại @{username}")
+        print(f"[ĐÃ VÀO PHÒNG] Đang canh Rương & Túi tại @{username}")
         try:
             room_data = getattr(client, "room_info", None)
             if room_data:
@@ -221,11 +213,10 @@ async def listen_room_for_coins(username: str):
                 if user_count:
                     room_viewers[username] = int(user_count)
 
-                # Quét rương/túi đã thả sẵn từ trước (kể cả khi chỉ còn 10s - 39s)
                 def scan_init(node, depth=0):
                     if node is None or depth > 4:
                         return
-                    entries = node.items() if isinstance(node, dict) else (vars(node).items() if hasattr(node, "__dict__") else [])
+                    entries = node.items() if isinstance(node, dict) else (vars(node).items() if hasattr(node, "__dict__") else ())
                     for k, v in entries:
                         k_str = str(k).lower()
                         if k_str.startswith("_"):
@@ -258,40 +249,41 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "🎁", coins, slots, open_at))
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
-            goody_cls = getattr(events, "GoodyBagEvent", None)
-if goody_cls:
-    @client.on(goody_cls)
-    async def on_goody_bag(event):
-        try:
-            open_at, coins, slots = parse_reward_details(event)
-            c_val = coins if coins else "-"
-            s_val = slots if slots else "?"
-            if open_at > time.time() + 8:
-                asyncio.create_task(schedule_reward_alert(username, "🛍️", c_val, s_val, open_at))
-            else:
-                bag_key = f"{username}:goody:{int(time.time() // 180)}"
+
+    goody_cls = getattr(events, "GoodyBagEvent", None)
+    if goody_cls:
+        @client.on(goody_cls)
+        async def on_goody_bag(event):
+            try:
+                open_at, coins, slots = parse_reward_details(event)
+                c_val = coins if coins else "-"
+                s_val = slots if slots else "?"
+                if open_at > time.time() + 8:
+                    asyncio.create_task(schedule_reward_alert(username, "🛍️", c_val, s_val, open_at))
+                else:
+                    bag_key = f"{username}:goody:{int(time.time() // 180)}"
+                    if bag_key not in scheduled_keys:
+                        scheduled_keys.add(bag_key)
+                        viewers = room_viewers.get(username, "?")
+                        msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 {c_val} ({s_val})\n👁️ {viewers}"
+                        print(f"[ĐÃ BÁO TÚI QUÀ] @{username} | View: {viewers}")
+                        await asyncio.to_thread(send_telegram, msg, build_live_url(username))
+            except Exception as e:
+                print(f"Lỗi túi quà @{username}: {e}")
+
+    room_msg_cls = getattr(events, "RoomMessageEvent", None)
+    if room_msg_cls:
+        @client.on(room_msg_cls)
+        async def on_room_msg(event):
+            content = str(getattr(event, "content", "") or getattr(event, "describe", "")).lower()
+            if any(w in content for w in ("túi quà", "goody bag", "goodybag", "gửi một túi")):
+                bag_key = f"{username}:chatbag:{int(time.time() // 180)}"
                 if bag_key not in scheduled_keys:
                     scheduled_keys.add(bag_key)
                     viewers = room_viewers.get(username, "?")
-                    msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 {c_val} ({s_val})\n👁️ {viewers}"
-                    print(f"[ĐÃ BÁO TÚI QUÀ] @{username} | View: {viewers}")
+                    msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 - (?)\n👁️ {viewers}"
+                    print(f"[ĐÃ BÁO TÚI CHAT] @{username} | View: {viewers}")
                     await asyncio.to_thread(send_telegram, msg, build_live_url(username))
-        except Exception as e:
-            print(f"Lỗi túi quà @{username}: {e}")
-
-room_msg_cls = getattr(events, "RoomMessageEvent", None)
-if room_msg_cls:
-    @client.on(room_msg_cls)
-    async def on_room_msg(event):
-        content = str(getattr(event, "content", "") or getattr(event, "describe", "")).lower()
-        if any(w in content for w in ("túi quà", "goody bag", "goodybag", "gửi một túi")):
-            bag_key = f"{username}:chatbag:{int(time.time() // 180)}"
-            if bag_key not in scheduled_keys:
-                scheduled_keys.add(bag_key)
-                viewers = room_viewers.get(username, "?")
-                msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 - (?)\n👁️ {viewers}"
-                print(f"[ĐÃ BÁO TÚI CHAT] @{username} | View: {viewers}")
-                await asyncio.to_thread(send_telegram, msg, build_live_url(username))
 
     @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
@@ -306,55 +298,44 @@ if room_msg_cls:
             icon = "🛍️" if ("goody" in full_sig or "bag" in full_sig) else "📦"
             c_val = coins if coins else "-"
             s_val = slots if slots else "?"
-
             if open_at > time.time() + 8:
                 asyncio.create_task(schedule_reward_alert(username, icon, c_val, s_val, open_at))
             else:
-                # Chống lặp 180 giây để chỉ gửi duy nhất 1 lần cho mỗi Túi Quà mã hóa mới
-                bag_key = f"{username}:bag:{int(time.time() // 180)}"
+                bag_key = f"{username}:unk:{int(time.time() // 180)}"
                 if bag_key not in scheduled_keys:
                     scheduled_keys.add(bag_key)
                     viewers = room_viewers.get(username, "?")
-                    msg = (
-                        f"{icon} ⏰ Mới thả\n"
-                        f"👤 @{username}\n"
-                        f"💎 {c_val} ({s_val})\n"
-                        f"👁️ {viewers}"
-                    )
-                    print(f"[ĐÃ BÁO TÚI MỚI] @{username} | View: {viewers}")
+                    msg = f"{icon} ⏰ Mới thả\n👤 @{username}\n💎 {c_val} ({s_val})\n👁️ {viewers}"
                     await asyncio.to_thread(send_telegram, msg, build_live_url(username))
 
-    
-        try:
-            await client.start()
-        except Exception as e:
-            print(f"[NGẮT KẾT NỐI] @{username}: {e}")
-        finally:
-            await asyncio.sleep(30)
-            active_listeners.discard(username)
-            room_viewers.pop(username, None)
+    try:
+        await client.start()
+    except Exception as e:
+        print(f"[NGẮT KẾT NỐI] @{username}: {e}")
+    finally:
+        await asyncio.sleep(30)
+        active_listeners.discard(username)
+        room_viewers.pop(username, None)
 
-    async def main():
-        print("San Ruong & Tui Qua Bot (17 Kenh - 40s & 10-39s Immediate) started!")
-        send_telegram(f"✅ Bot 17 Kênh đã khởi động! Báo ở mốc 40s (hoặc báo ngay nếu còn 10s-39s).")
-        while True:
-            for username in CHANNELS:
-                if username not in active_listeners:
-                    try:
-                        checker = TikTokLiveClient(unique_id=f"@{username}")
-                        if await checker.is_live():
-                            asyncio.create_task(listen_room_for_coins(username))
-                    except Exception as e:
-                        if "Expecting value" in str(e):
-                            await asyncio.sleep(10)
-                        else:
-                            print(f"Lỗi kiểm tra @{username}: {e}")
-                await asyncio.sleep(random.uniform(2.5, 4.0))
-            await asyncio.sleep(20)
+async def main():
+    print("San Ruong & Tui Qua Bot (17 Kenh - Full GoodyBag + Envelope) started!")
+    send_telegram(f"✅ Bot Bản Full (Rương Xu + Túi Quà) đã khởi động! Đang canh {len(CHANNELS)} kênh.")
+    while True:
+        for username in CHANNELS:
+            if username not in active_listeners:
+                try:
+                    checker = TikTokLiveClient(unique_id=f"@{username}")
+                    if await checker.is_live():
+                        asyncio.create_task(listen_room_for_coins(username))
+                except Exception as e:
+                    if "Expecting value" in str(e):
+                        await asyncio.sleep(10)
+                    else:
+                        print(f"Lỗi kiểm tra @{username}: {e}")
+            await asyncio.sleep(random.uniform(2.5, 4.0))
+        await asyncio.sleep(20)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
 
 
