@@ -256,22 +256,38 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "🎁", coins, slots, open_at))
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
-    @client.on(UnknownEvent)
+                @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
         raw_type = str(getattr(event, "type", ""))
         base_msg = getattr(event, "base_message", None)
         method_name = str(getattr(base_msg, "method", "")) if base_msg else ""
-        raw_payload = str(getattr(event, "payload", b""))[:300]
+        raw_payload = str(getattr(event, "payload", b""))[:400]
         full_sig = f"{type(event).__name__} {raw_type} {method_name} {raw_payload}".lower()
 
         if any(k in full_sig for k in REWARD_KEYWORDS):
             open_at, coins, slots = parse_reward_details(event)
-            if open_at > time.time() + 8:
-                icon = "🛍️" if ("goody" in full_sig or "bag" in full_sig) else "📦"
-                c_val = coins if coins else "-"
-                s_val = slots if slots else "?"
-                asyncio.create_task(schedule_reward_alert(username, icon, c_val, s_val, open_at))
+            icon = "🛍️" if ("goody" in full_sig or "bag" in full_sig) else "📦"
+            c_val = coins if coins else "-"
+            s_val = slots if slots else "?"
 
+            if open_at > time.time() + 8:
+                asyncio.create_task(schedule_reward_alert(username, icon, c_val, s_val, open_at))
+            else:
+                # Chống lặp 180 giây để chỉ gửi duy nhất 1 lần cho mỗi Túi Quà mã hóa mới
+                bag_key = f"{username}:bag:{int(time.time() // 180)}"
+                if bag_key not in scheduled_keys:
+                    scheduled_keys.add(bag_key)
+                    viewers = room_viewers.get(username, "?")
+                    msg = (
+                        f"{icon} ⏰ Mới thả\n"
+                        f"👤 @{username}\n"
+                        f"💎 {c_val} ({s_val})\n"
+                        f"👁️ {viewers}"
+                    )
+                    print(f"[ĐÃ BÁO TÚI MỚI] @{username} | View: {viewers}")
+                    await asyncio.to_thread(send_telegram, msg, build_live_url(username))
+
+ 
 
     try:
         await client.start()
