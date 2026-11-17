@@ -39,6 +39,7 @@ CHANNELS = [
     "tribalchief503",
     "the_dreamer104",
     "umid.geldi.zirvee",
+    "manaro47",
 ]
 
 active_listeners = set()
