@@ -141,14 +141,14 @@ async def schedule_reward_alert(username: str, type_icon: str, coins, slots, ope
         await asyncio.to_thread(send_telegram, msg, build_live_url(username))
     except Exception as e:
         print(f"[LỖI HẸN GIỜ] @{username}: {e}")
-
 async def listen_room_for_coins(username: str):
     active_listeners.add(username)
+    print(f"[BẮT ĐẦU KẾT NỐI] Đang mở cổng WebSocket vào @{username}...")
     client = TikTokLiveClient(unique_id=f"@{username}")
 
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
-        print(f"[ĐÃ VÀO PHÒNG] Đang canh Rương & Túi tại @{username}")
+        print(f"[ĐÃ VÀO PHÒNG THÀNH CÔNG] Đang rình Rương & Túi bên trong @{username}!")
         try:
             room_data = getattr(client, "room_info", None)
             if room_data:
@@ -174,7 +174,6 @@ async def listen_room_for_coins(username: str):
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
 
-    # Bắt Sóng Trực Tiếp: Gửi ngay mọi gói tin sự kiện/túi quà mới xuất hiện trong phòng về Telegram
     @client.on(events.Event)
     async def on_catch_all_bags(event):
         ev_name = type(event).__name__
@@ -182,7 +181,6 @@ async def listen_room_for_coins(username: str):
         m_name = str(getattr(b_msg, "method", "")) if b_msg else ""
         sig = f"{ev_name} {m_name}".lower()
 
-        # Loại bỏ các sự kiện tương tác thông thường để chỉ giữ lại gói tin Túi Quà / Sự Kiện
         normal_events = (
             "like", "chat", "member", "social", "roomuser", "gift",
             "follow", "share", "emote", "envelope", "connect", "disconnect",
@@ -192,7 +190,6 @@ async def listen_room_for_coins(username: str):
         if any(w in sig for w in normal_events):
             return
 
-        # Khóa chống spam 180 giây cho mỗi loại sự kiện trong cùng phòng
         bag_key = f"{username}:{ev_name}:{m_name}:{int(time.time() // 180)}"
         if bag_key in scheduled_keys:
             return
@@ -209,13 +206,15 @@ async def listen_room_for_coins(username: str):
         await asyncio.to_thread(send_telegram, msg, build_live_url(username))
 
     try:
-        await client.start()
+        # Chạy kết nối phòng live với fetch_room_info=True để ép lấy dữ liệu phòng ngay lập tức
+        await client.start(fetch_room_info=True)
     except Exception as e:
-        print(f"[NGẮT KẾT NỐI] @{username}: {e}")
+        print(f"[LỖI VÀO PHÒNG] @{username}: {type(e).__name__} - {e}")
     finally:
-        await asyncio.sleep(30)
+        await asyncio.sleep(20)
         active_listeners.discard(username)
         room_viewers.pop(username, None)
+
 
 async def main():
     print("San Ruong & Bat Song Tui Qua Bot (18 Kenh - Chong Treo) started!")
