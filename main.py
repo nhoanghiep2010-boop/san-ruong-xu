@@ -335,22 +335,22 @@ if room_msg_cls:
             room_viewers.pop(username, None)
 
     async def main():
-    print("San Ruong & Tui Qua Bot (17 Kenh - 40s & 10-39s Immediate) started!")
-    send_telegram(f"✅ Bot 17 Kênh đã khởi động! Báo ở mốc 40s (hoặc báo ngay nếu còn 10s-39s).")
-    while True:
-        for username in CHANNELS:
-            if username not in active_listeners:
-                try:
-                    checker = TikTokLiveClient(unique_id=f"@{username}")
-                    if await checker.is_live():
-                        asyncio.create_task(listen_room_for_coins(username))
-                except Exception as e:
-                    if "Expecting value" in str(e):
-                        await asyncio.sleep(10)
-                    else:
-                        print(f"Lỗi kiểm tra @{username}: {e}")
-            await asyncio.sleep(random.uniform(2.5, 4.0))
-        await asyncio.sleep(20)
+        print("San Ruong & Tui Qua Bot (17 Kenh - 40s & 10-39s Immediate) started!")
+        send_telegram(f"✅ Bot 17 Kênh đã khởi động! Báo ở mốc 40s (hoặc báo ngay nếu còn 10s-39s).")
+        while True:
+            for username in CHANNELS:
+                if username not in active_listeners:
+                    try:
+                        checker = TikTokLiveClient(unique_id=f"@{username}")
+                        if await checker.is_live():
+                            asyncio.create_task(listen_room_for_coins(username))
+                    except Exception as e:
+                        if "Expecting value" in str(e):
+                            await asyncio.sleep(10)
+                        else:
+                            print(f"Lỗi kiểm tra @{username}: {e}")
+                await asyncio.sleep(random.uniform(2.5, 4.0))
+            await asyncio.sleep(20)
 
 if __name__ == "__main__":
     asyncio.run(main())
