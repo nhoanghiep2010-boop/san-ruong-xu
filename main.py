@@ -258,40 +258,40 @@ async def listen_room_for_coins(username: str):
                 asyncio.create_task(schedule_reward_alert(username, "🎁", coins, slots, open_at))
         except Exception as e:
             print(f"Lỗi rương xu @{username}: {e}")
-                goody_cls = getattr(events, "GoodyBagEvent", None)
-    if goody_cls:
-        @client.on(goody_cls)
-        async def on_goody_bag(event):
-            try:
-                open_at, coins, slots = parse_reward_details(event)
-                c_val = coins if coins else "-"
-                s_val = slots if slots else "?"
-                if open_at > time.time() + 8:
-                    asyncio.create_task(schedule_reward_alert(username, "🛍️", c_val, s_val, open_at))
-                else:
-                    bag_key = f"{username}:goody:{int(time.time() // 180)}"
-                    if bag_key not in scheduled_keys:
-                        scheduled_keys.add(bag_key)
-                        viewers = room_viewers.get(username, "?")
-                        msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 {c_val} ({s_val})\n👁️ {viewers}"
-                        print(f"[ĐÃ BÁO TÚI QUÀ] @{username} | View: {viewers}")
-                        await asyncio.to_thread(send_telegram, msg, build_live_url(username))
-            except Exception as e:
-                print(f"Lỗi túi quà @{username}: {e}")
-
-    room_msg_cls = getattr(events, "RoomMessageEvent", None)
-    if room_msg_cls:
-        @client.on(room_msg_cls)
-        async def on_room_msg(event):
-            content = str(getattr(event, "content", "") or getattr(event, "describe", "")).lower()
-            if any(w in content for w in ("túi quà", "goody bag", "goodybag", "gửi một túi")):
-                bag_key = f"{username}:chatbag:{int(time.time() // 180)}"
+            goody_cls = getattr(events, "GoodyBagEvent", None)
+if goody_cls:
+    @client.on(goody_cls)
+    async def on_goody_bag(event):
+        try:
+            open_at, coins, slots = parse_reward_details(event)
+            c_val = coins if coins else "-"
+            s_val = slots if slots else "?"
+            if open_at > time.time() + 8:
+                asyncio.create_task(schedule_reward_alert(username, "🛍️", c_val, s_val, open_at))
+            else:
+                bag_key = f"{username}:goody:{int(time.time() // 180)}"
                 if bag_key not in scheduled_keys:
                     scheduled_keys.add(bag_key)
                     viewers = room_viewers.get(username, "?")
-                    msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 - (?)\n👁️ {viewers}"
-                    print(f"[ĐÃ BÁO TÚI CHAT] @{username} | View: {viewers}")
+                    msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 {c_val} ({s_val})\n👁️ {viewers}"
+                    print(f"[ĐÃ BÁO TÚI QUÀ] @{username} | View: {viewers}")
                     await asyncio.to_thread(send_telegram, msg, build_live_url(username))
+        except Exception as e:
+            print(f"Lỗi túi quà @{username}: {e}")
+
+room_msg_cls = getattr(events, "RoomMessageEvent", None)
+if room_msg_cls:
+    @client.on(room_msg_cls)
+    async def on_room_msg(event):
+        content = str(getattr(event, "content", "") or getattr(event, "describe", "")).lower()
+        if any(w in content for w in ("túi quà", "goody bag", "goodybag", "gửi một túi")):
+            bag_key = f"{username}:chatbag:{int(time.time() // 180)}"
+            if bag_key not in scheduled_keys:
+                scheduled_keys.add(bag_key)
+                viewers = room_viewers.get(username, "?")
+                msg = f"🛍️ ⏰ Mới thả\n👤 @{username}\n💎 - (?)\n👁️ {viewers}"
+                print(f"[ĐÃ BÁO TÚI CHAT] @{username} | View: {viewers}")
+                await asyncio.to_thread(send_telegram, msg, build_live_url(username))
 
     @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
