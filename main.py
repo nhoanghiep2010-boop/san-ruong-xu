@@ -324,18 +324,17 @@ if room_msg_cls:
                     print(f"[ĐÃ BÁO TÚI MỚI] @{username} | View: {viewers}")
                     await asyncio.to_thread(send_telegram, msg, build_live_url(username))
 
- 
+    
+        try:
+            await client.start()
+        except Exception as e:
+            print(f"[NGẮT KẾT NỐI] @{username}: {e}")
+        finally:
+            await asyncio.sleep(30)
+            active_listeners.discard(username)
+            room_viewers.pop(username, None)
 
-    try:
-        await client.start()
-    except Exception as e:
-        print(f"[NGẮT KẾT NỐI] @{username}: {e}")
-    finally:
-        await asyncio.sleep(30)
-        active_listeners.discard(username)
-        room_viewers.pop(username, None)
-
-async def main():
+    async def main():
     print("San Ruong & Tui Qua Bot (17 Kenh - 40s & 10-39s Immediate) started!")
     send_telegram(f"✅ Bot 17 Kênh đã khởi động! Báo ở mốc 40s (hoặc báo ngay nếu còn 10s-39s).")
     while True:
