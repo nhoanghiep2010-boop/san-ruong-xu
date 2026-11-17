@@ -287,6 +287,12 @@ async def listen_room_for_coins(username: str):
 
     @client.on(UnknownEvent)
     async def on_unknown(event: UnknownEvent):
+        ev_name = type(event).__name__
+        b_msg = getattr(event, "base_message", None)
+        m_name = getattr(b_msg, "method", "") if b_msg else ""
+        if not any(ignore in f"{ev_name} {m_name}".lower() for ignore in ("like", "chat", "member", "social", "roomuser", "linklayer", "linkmic", "fan", "emote")):
+            print(f"[RADAR GÓI TIN LẠ] @{username} -> Class: {ev_name} | Method: {m_name}")
+
         raw_type = str(getattr(event, "type", ""))
         base_msg = getattr(event, "base_message", None)
         method_name = str(getattr(base_msg, "method", "")) if base_msg else ""
